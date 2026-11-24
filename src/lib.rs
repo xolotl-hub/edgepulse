@@ -1,6 +1,8 @@
 pub mod engine;
 pub mod model;
 pub mod scale;
+#[cfg(feature = "wasm")]
+pub mod wasm;
 
 pub use engine::EdgePulseState;
 pub use model::{
