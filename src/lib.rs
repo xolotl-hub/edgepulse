@@ -1,5 +1,6 @@
 pub mod engine;
 pub mod model;
+pub mod overlays;
 pub mod scale;
 #[cfg(feature = "wasm")]
 pub mod wasm;
@@ -8,6 +9,10 @@ pub use engine::EdgePulseState;
 pub use model::{
     BoxZoneOverlay, Candle, HLineOverlay, IndicatorsState, LogicalRange, MarkerOverlay, PlotPoint,
     PlotSeries, RenderOutput, Viewport, VisibleRange, VolumeBar,
+};
+pub use overlays::{
+    ProjectedBox, ProjectedHLine, ProjectedMarker, ProjectedOverlays, ProjectedPlot,
+    ProjectedPlotPoint,
 };
 
 #[cfg(test)]
@@ -95,5 +100,116 @@ mod tests {
         assert_eq!(overlays.hlines.len(), 1);
         state.set_overlays(Some(overlays));
         assert!(state.overlays.is_some());
+    }
+
+    #[test]
+    fn projects_and_culls_overlays_with_marker_stacking() {
+        let mut state = EdgePulseState::new();
+        state.resize(900.0, 500.0);
+        state.set_data_flat(&sample_flat_candles(60, 100.0));
+
+        let visible_t = state.candles[50].time;
+        let offscreen_t = state.candles[0].time - 86_400.0 * 30.0;
+        let p = state.candles[50].low;
+
+        let overlays = RenderOutput {
+            plots: vec![],
+            hlines: vec![
+                HLineOverlay {
+                    id: "hl_vis".to_string(),
+                    price: p,
+                    title: "VIS".to_string(),
+                    color: "#f59e0b".to_string(),
+                    style: Some("dashed".to_string()),
+                },
+                HLineOverlay {
+                    id: "hl_out".to_string(),
+                    price: 999_999.0,
+                    title: "OUT".to_string(),
+                    color: "#f59e0b".to_string(),
+                    style: None,
+                },
+            ],
+            boxes: vec![],
+            markers: vec![
+                MarkerOverlay {
+                    id: "m1".to_string(),
+                    time: visible_t,
+                    price: p,
+                    kind: "buy".to_string(),
+                    label: "BUY".to_string(),
+                    color: "#22c55e".to_string(),
+                },
+                MarkerOverlay {
+                    id: "m2".to_string(),
+                    time: visible_t,
+                    price: p,
+                    kind: "buy".to_string(),
+                    label: "🐳".to_string(),
+                    color: "#3b82f6".to_string(),
+                },
+                MarkerOverlay {
+                    id: "m_off".to_string(),
+                    time: offscreen_t,
+                    price: p,
+                    kind: "buy".to_string(),
+                    label: "OFF".to_string(),
+                    color: "#22c55e".to_string(),
+                },
+            ],
+            logs: vec![],
+            error: None,
+        };
+
+        state.set_overlays(Some(overlays));
+        let proj = overlays::project_overlays(&state);
+        assert_eq!(proj.hlines.len(), 1);
+        assert_eq!(proj.markers.len(), 2);
+        assert!(proj.markers[0].show_pointer);
+        assert!(!proj.markers[1].show_pointer);
+        assert!(proj.markers[1].pill_y > proj.markers[0].pill_y);
+    }
+
+    #[test]
+    fn log_scale_roundtrip_and_lod_decimation() {
+        let mut state = EdgePulseState::new();
+        state.resize(900.0, 500.0);
+        state.viewport.log_scale = true;
+        state.set_data_flat(&sample_flat_candles(200, 100.0));
+
+        let p = state.candles[150].close;
+        let y = state.price_to_coordinate(p);
+        let back = state.coordinate_to_price(y);
+        assert!((back - p).abs() < 1e-6);
+
+        // Con bar_spacing = 0.5 (< 2.0) debe decimar puntos cercanos (< 0.75px)
+        state.viewport.bar_spacing = 0.5;
+        let data: Vec<PlotPoint> = state
+            .candles
+            .iter()
+            .map(|c| PlotPoint {
+                time: c.time,
+                value: Some(c.close),
+            })
+            .collect();
+        state.set_overlays(Some(RenderOutput {
+            plots: vec![PlotSeries {
+                id: "p1".to_string(),
+                title: "EMA".to_string(),
+                color: "#38bdf8".to_string(),
+                line_width: Some(1.5),
+                style: None,
+                pane: None,
+                data,
+            }],
+            hlines: vec![],
+            boxes: vec![],
+            markers: vec![],
+            logs: vec![],
+            error: None,
+        }));
+        let proj = overlays::project_overlays(&state);
+        assert_eq!(proj.plots.len(), 1);
+        assert!(proj.plots[0].points.len() < 200, "LOD should decimate dense points");
     }
 }

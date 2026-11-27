@@ -103,8 +103,19 @@ pub fn x_to_time(vp: &Viewport, candles: &[Candle], x: f64) -> Option<f64> {
 }
 
 pub fn price_to_y(vp: &Viewport, price: f64) -> f64 {
-    let range = vp.visible_max_price - vp.visible_min_price;
     let plot_h = vp.plot_height();
+    if vp.log_scale && vp.visible_min_price > 0.0 && vp.visible_max_price > vp.visible_min_price {
+        let min_l = vp.visible_min_price.ln();
+        let max_l = vp.visible_max_price.ln();
+        let span = max_l - min_l;
+        if span <= 0.0 {
+            return plot_h / 2.0;
+        }
+        let p_l = price.max(1e-12).ln();
+        return plot_h - ((p_l - min_l) / span) * plot_h;
+    }
+
+    let range = vp.visible_max_price - vp.visible_min_price;
     if range <= 0.0 {
         return plot_h / 2.0;
     }
@@ -112,8 +123,18 @@ pub fn price_to_y(vp: &Viewport, price: f64) -> f64 {
 }
 
 pub fn y_to_price(vp: &Viewport, y: f64) -> f64 {
-    let range = vp.visible_max_price - vp.visible_min_price;
     let plot_h = vp.plot_height();
+    if vp.log_scale && vp.visible_min_price > 0.0 && vp.visible_max_price > vp.visible_min_price {
+        let min_l = vp.visible_min_price.ln();
+        let max_l = vp.visible_max_price.ln();
+        let span = max_l - min_l;
+        if span <= 0.0 {
+            return 0.0;
+        }
+        return (min_l + ((plot_h - y) / plot_h) * span).exp();
+    }
+
+    let range = vp.visible_max_price - vp.visible_min_price;
     if range <= 0.0 {
         return 0.0;
     }

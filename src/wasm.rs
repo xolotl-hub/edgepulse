@@ -55,6 +55,10 @@ impl EdgePulseCore {
         self.state.toggle_indicator(key)
     }
 
+    pub fn set_log_scale(&mut self, enabled: bool) {
+        self.state.viewport.log_scale = enabled;
+    }
+
     pub fn resize(&mut self, width: f64, height: f64, dpr: f64) {
         self.state.resize(width, height);
         if let Some(ctx) = &self.ctx {
@@ -108,6 +112,12 @@ impl EdgePulseCore {
 
     pub fn candle_count(&self) -> usize {
         self.state.candles.len()
+    }
+
+    /// Proyecta y recorta overlays al viewport actual con anti-colisión de marcadores en Rust
+    pub fn project_overlays(&self) -> JsValue {
+        let projected = crate::overlays::project_overlays(&self.state);
+        serde_wasm_bindgen::to_value(&projected).unwrap_or(JsValue::NULL)
     }
 
     /// Renderiza fondo, grilla, volumen, velas, EMAs y overlays directamente desde memoria lineal Rust

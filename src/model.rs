@@ -60,6 +60,10 @@ pub struct PlotSeries {
     pub color: String,
     #[serde(rename = "lineWidth")]
     pub line_width: Option<f64>,
+    #[serde(default)]
+    pub style: Option<String>,
+    #[serde(default)]
+    pub pane: Option<String>,
     pub data: Vec<PlotPoint>,
 }
 
@@ -131,6 +135,7 @@ pub struct Viewport {
     pub visible_min_price: f64,
     pub visible_max_price: f64,
     pub is_auto_scale: bool,
+    pub log_scale: bool,
     pub user_price_scale_multiplier: f64,
     pub user_price_offset: f64,
 }
@@ -150,6 +155,7 @@ impl Default for Viewport {
             visible_min_price: 0.0,
             visible_max_price: 1.0,
             is_auto_scale: true,
+            log_scale: false,
             user_price_scale_multiplier: 1.0,
             user_price_offset: 0.0,
         }
